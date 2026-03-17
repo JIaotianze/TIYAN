@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>杜十娘：数字视觉交互引擎</title>
+    <style>
+        /* 强制全屏，绝不留白 */
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
+        #canvas { display: block; width: 100vw; height: 100vh; }
+        
+        /* 界面层：z-index 高于 canvas */
+        #ui { position: absolute; top: 20px; left: 20px; z-index: 100; color: #d4af37; pointer-events: none; }
+        .panel { pointer-events: auto; background: rgba(0,0,0,0.85); border: 1px solid #d4af37; padding: 15px; width: 250px; }
+        button { display: block; width: 100%; padding: 10px; margin: 5px 0; background: #111; border: 1px solid #444; color: #d4af37; cursor: pointer; }
+        button:hover { background: #d4af37; color: #000; }
+        .active { border-color: #fff; background: #333; }
+    </style>
+</head>
+<body>
+
+<div id="ui">
+    <div class="panel">
+        <h2>[CONTROL_PANEL]</h2>
+        <button onclick="changeMode('FLOW', this)">01_寒江流转</button>
+        <button onclick="changeMode('SPIRAL', this)">02_宿命回旋</button>
+        <button onclick="changeMode('SHATTER', this)">03_百宝破碎</button>
+        <button onclick="changeMode('CHAOS', this)">04_心火幻灭</button>
+        <button onclick="triggerCollapse()" style="border: 2px solid #f00; color: #f00;">[TRIGGER] 怒沉百宝箱</button>
+    </div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script type="module">
+import * as THREE from 'https://cdn.skypack.dev/three@0.136.0';
+
+// 确保页面加载完成后运行
+window.onload = () => {
+    const canvas = document.getElementById('canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.autoClearColor = false; // 轨迹特效核心
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    camera.position.z = 10;
+
+    // 粒子系统
+    const count = 30000;
+    const geometry = new THREE.BufferGeometry();
+    const pos = new Float32Array(count * 3);
+    const vel = new Float32Array(count * 3);
+    for(let i=0; i<count*3; i++) pos[i] = (Math.random()-0.5)*20;
+    geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    
+    const material = new THREE.PointsMaterial({ size: 0.04, color: 0xd4af37, transparent: true, blending: THREE.AdditiveBlending });
+    const particles = new THREE.Points(geometry, material);
+    scene.add(particles);
+
+    // 状态管理
+    let currentMode = 'FLOW';
+    let isCollapsing = false;
+    const mouse = new THREE.Vector2(0,0);
+
+    window.changeMode = (m, el) => {
+        currentMode = m;
+        document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        if(el) el.classList.add('active');
+    };
+
+    window.triggerCollapse = () => {
+        isCollapsing = true;
+        setTimeout(() => isCollapsing = false, 2000);
+    };
+
+    window.addEventListener('mousemove', e => {
+        mouse.x = (e.clientX/window.innerWidth)*2-1;
+        mouse.y = -(e.clientY/window.innerHeight)*2+1;
+    });
+
+    // 动画循环
+    function animate() {
+        requestAnimationFrame(animate);
+        renderer.setClearColor(0x000000, 0.15); // 拖尾效果
+        renderer.clearColor();
+
+        const p = particles.geometry.attributes.position.array;
+        
+        for(let i=0; i<count; i++) {
+            let ix=i*3, iy=i*3+1;
+            let dx = (mouse.x * 10) - p[ix];
+            let dy = (mouse.y * 10) - p[iy];
+            
+            // 物理运动
+            if(isCollapsing) {
+                p[ix] *= 0.95; p[iy] *= 0.95;
+            } else {
+                if(currentMode === 'FLOW') { vel[ix] += Math.sin(p[iy]*0.3)*0.01; vel[iy] += Math.cos(p[ix]*0.3)*0.01; }
+                else if(currentMode === 'SPIRAL') { vel[ix] += -p[iy]*0.005; vel[iy] += p[ix]*0.005; }
+                else if(currentMode === 'SHATTER') { vel[ix] -= dx*0.01; vel[iy] -= dy*0.01; }
+                else if(currentMode === 'CHAOS') { vel[ix] += (Math.random()-0.5)*0.1; vel[iy] += (Math.random()-0.5)*0.1; }
+                
+                vel[ix] *= 0.96; vel[iy] *= 0.96;
+                p[ix] += vel[ix]; p[iy] += vel[iy];
+            }
+        }
+        particles.geometry.attributes.position.needsUpdate = true;
+        renderer.render(scene, camera);
+    }
+    animate();
+};
+</script>
+</body>
+</html>
